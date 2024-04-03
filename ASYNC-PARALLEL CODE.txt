@@ -1,0 +1,84 @@
+let processingQueue = [];
+const videoConvertor = async (req, res) => {
+  try {
+
+    const { buffer, originalname } = req.file;
+
+    // Define the path where the uploaded video will be saved
+    const uploadDir = path.join(__dirname, 'inputVideo2');
+    const videoFilePath = path.join(uploadDir, originalname);
+    console.log('videoFilePath', videoFilePath);
+
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(videoFilePath, buffer);
+
+    const outputDir = path.join(__dirname, 'outputVideo2');
+    const outputFilePath = path.join(outputDir, originalname.replace(/\.[^/.]+$/, ".mp4"));
+    console.log(outputFilePath);
+
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Add the video to the processing queue
+    processingQueue.push(originalname);
+
+    async.parallelLimit([
+      function (callback) {
+        const ffmpegProcess = ffmpeg(videoFilePath)
+          .output(outputFilePath)
+          .videoCodec('libx264')
+          .audioCodec('aac')
+          .outputFPS(13)
+          .on('start', (commandLine) => {
+            console.log(`Processing video: ${originalname}`);
+            console.log(`FFmpeg command: ${commandLine}`);
+          })
+          .on('end', () => {
+            console.log(`Video ${originalname} MP4 Conversion finished....`.bgCyan.white);
+            // Remove the video from the processing queue
+            processingQueue = processingQueue.filter(item => item !== originalname);
+            callback(null, outputFilePath);
+          })
+          .on('error', (err) => {
+            console.error('Error:', err);
+            callback(err);
+          })
+          .run();
+      }
+    ], 2,
+      function (err, results) {
+        // fs.unlinkSync(videoFilePath);
+        if (!err) {
+          res.status(200).contentType('video/mp4').sendFile(results[0], (err) => {
+            if (err) {
+              console.error('Error sending file:', err);
+            } else {
+              // fs.unlinkSync(results[0]); 
+
+              // Remove the processed file from the processingQueue
+              const processedFile = results[0].split(path.sep).pop();
+              processingQueue = processingQueue.filter(item => item !== processedFile);
+
+              // Log the updated processingQueue
+              console.log(`Updated processingQueue stack : [${processingQueue}]`.bgMagenta.white);
+              console.log(`Updated remaining queue Count : [${processingQueue.length}]`.bgMagenta.white);
+            }
+          });
+
+        } else {
+          console.error('Async error:', err);
+          res.status(500).end();
+        }
+      });
+
+    // Print the videos in processing queue
+    console.log(`Videos in processing queue: [${processingQueue}]`.bgYellow.black);
+    console.log(`Videos in processing queue Count : [${processingQueue.length}]`.bgYellow.black);
+  } catch (err) {
+    console.log(err);
+    res.status(501).send({ message: "Data is not sent." });
+  }
+};
