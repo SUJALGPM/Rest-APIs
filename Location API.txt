@@ -1,0 +1,128 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+
+
+const Location = () => {
+    const [latitude, setLatitude] = useState(null);
+    const [longitude, setLongitude] = useState(null);
+    const [error, setError] = useState(null);
+    const [result, setResult] = useState(null);
+
+
+    //Fetch current Latitude and longitude....
+    useEffect(() => {
+        const getLocation = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        setLatitude(position.coords.latitude);
+                        setLongitude(position.coords.longitude);
+                    },
+                    (error) => {
+                        setError(error.message);
+                    }
+                );
+            } else {
+                setError('Geolocation is not supported by your browser.');
+            }
+        };
+
+        getLocation();
+    }, []);
+
+
+    //Fetch current Location...
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+                setResult(response.data);
+            } catch (error) {
+                setError('Error fetching location information.');
+            }
+        };
+
+        if (latitude !== null && longitude !== null) {
+            fetchData();
+        }
+    }, [latitude, longitude]);
+
+
+    //Display info in table...
+    const renderTable = () => {
+        if (result) {
+            const { address, lat, lon, name } = result;
+            return (
+                <table>
+                    <tbody>
+                        <tr>
+                            <td>Latitude:</td>
+                            <td>{lat}</td>
+                        </tr>
+                        <tr>
+                            <td>Longitude:</td>
+                            <td>{lon}</td>
+                        </tr>
+                        <tr>
+                            <td>Name:</td>
+                            <td>{name}</td>
+                        </tr>
+                        <tr>
+                            <td>Shop:</td>
+                            <td>{address.shop}</td>
+                        </tr>
+                        <tr>
+                            <td>Road:</td>
+                            <td>{address.road}</td>
+                        </tr>
+                        <tr>
+                            <td>Neighbourhood:</td>
+                            <td>{address.neighbourhood}</td>
+                        </tr>
+                        <tr>
+                            <td>Suburb:</td>
+                            <td>{address.suburb}</td>
+                        </tr>
+                        <tr>
+                            <td>City:</td>
+                            <td>{address.city}</td>
+                        </tr>
+                        <tr>
+                            <td>State:</td>
+                            <td>{address.state}</td>
+                        </tr>
+                        <tr>
+                            <td>Postcode:</td>
+                            <td>{address.postcode}</td>
+                        </tr>
+                        <tr>
+                            <td>Country:</td>
+                            <td>{address.country}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            );
+        }
+    };
+
+
+    return (
+        <div>
+            <h2>Current Location</h2>
+            {latitude && longitude ? (
+                <div>
+                    <p>Latitude: {latitude}</p>
+                    <p>Longitude: {longitude}</p>
+                    {renderTable()}
+                </div>
+            ) : error ? (
+                <p>Error: {error}</p>
+            ) : (
+                <p>Loading...</p>
+            )}
+        </div>
+    );
+};
+
+export default Location;
