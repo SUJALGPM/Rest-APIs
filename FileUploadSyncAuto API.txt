@@ -1,0 +1,39 @@
+const uploadVideosToAPI = async () => {
+  try {
+    const folderPath = 'S:/PROGRAMS/Mern_Stack Projects/Internship Projects  🔐🔐🔐/iCreateVideo-main/iCreateVideoBackend/TestVideo';
+
+    // Get a list of all files in the folder
+    const files = fs.readdirSync(folderPath);
+
+    // Filter only video files (assuming they all have the .webm extension)
+    const videoFiles = files.filter(file => file.endsWith('.webm'));
+
+    // Iterate through each video file and upload it to the API
+    for (const videoFile of videoFiles) {
+      const videoPath = path.join(folderPath, videoFile);
+
+      // Read the video file as a buffer asynchronously
+      const videoBuffer = await fs.promises.readFile(videoPath);
+
+      // Create a FormData object
+      const formData = new FormData();
+      formData.append('video', videoBuffer, { filename: videoFile });
+
+      // Make a POST request to the API endpoint with FormData
+      const response = await axios.post('http://192.168.1.10:8050/api/auth/videoCon', formData, {
+        headers: {
+          ...formData.getHeaders(), 
+        },
+      });
+
+      // console.log(`Uploaded ${videoFile}: ${response.data}`); 
+      console.log(`Uploaded ${videoFile}`.bgBlue.white); 
+    }
+
+    console.log('All webm video file uploaded successfully...'.bgMagenta.white);
+  } catch (error) {
+    console.error('Error uploading videos:', error);
+  }
+};
+
+uploadVideosToAPI();
