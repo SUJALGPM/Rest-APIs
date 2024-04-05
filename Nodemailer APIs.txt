@@ -1,0 +1,56 @@
+const nodemailer = require("nodemailer");
+
+
+const forgetPassword = async (req, res) => {
+    try {
+
+        const { MRID } = req.body;
+        const mrExist = await User.findOne({ MRID: MRID });
+
+        if (!mrExist) {
+            return res.status(404).send({ message: "MR Not found...!!!", success: false });
+        }
+
+        // Send the password directly via email
+        const mrEmail = mrExist.EMAIL;
+        const mrPassword = mrExist.PASSWORD;
+
+        // NodeMailer Configuration
+        var transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: 'digilateraldev@gmail.com',
+                pass: 'aekm bxbe duvs vyzx'
+            }
+        });
+
+        // Email content
+        var mailOptions = {
+            from: 'digiLateraliCreateVideoPanel@gmail.com',
+            to: mrEmail,
+            subject: 'Restore forget Password👍',
+            html: `
+              <div style="border: 1px solid #000; padding: 10px; text-align: center;">
+                <h3 style="text-align: center;">Dear : ${mrExist.USERNAME}</h3>
+                <p> Your Password For <span style="background-color: blue; color: white; padding: 3px;">iCreateVideo Panel </span> : ${mrPassword}</p>
+                <p>Please keep this information secure.</p>
+                <p>If you didn't request this, please ignore this email.</p>
+              </div>
+            `
+        };
+
+        // Send the email
+        transporter.sendMail(mailOptions, function (error, info) {
+            if (error) {
+                console.log(error);
+                return res.status(500).send({ message: "Error sending email", success: false });
+            } else {
+                console.log('Email sent: ' + info.response);
+                return res.status(200).send({ message: "Password sent successfully", success: true });
+            }
+        });
+
+    } catch (err) {
+        console.log(err);
+    }
+}
