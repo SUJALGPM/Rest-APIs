@@ -1,0 +1,41 @@
+const uploadVideoToAPI = async (videoPath, videoName) => {
+  try {
+    const videoBuffer = await fs.promises.readFile(videoPath);
+    const formData = new FormData();
+    formData.append('video', videoBuffer, { filename: videoName });
+
+    const response = await axios.post('http://192.168.1.10:8050/api/auth/videoCon', formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+    });
+
+    console.log(`Uploaded ${videoName}: ${response.data}`);
+  } catch (error) {
+    console.error(`Error uploading ${videoName}:`, error);
+  }
+};
+
+const uploadVideosInParallel = async () => {
+  const folderPath = 'S:/PROGRAMS/Mern_Stack Projects/Internship Projects  🔐🔐🔐/iCreateVideo-main/iCreateVideoBackend/TestVideo';
+  const files = fs.readdirSync(folderPath);
+  const videoFiles = files.filter(file => file.endsWith('.webm'));
+
+  const uploadPromises = [];
+  for (const videoFile of videoFiles) {
+    const videoPath = path.join(folderPath, videoFile);
+    const uploadPromise = uploadVideoToAPI(videoPath, videoFile);
+    uploadPromises.push(uploadPromise);
+  }
+
+  try {
+    await Promise.all(uploadPromises);
+    console.log('All webm video files uploaded successfully.');
+  } catch (error) {
+    console.error('Error uploading videos:', error);
+  }
+};
+
+// Usage example
+uploadVideosInParallel();
+
