@@ -1,0 +1,91 @@
+Server video fetch side...........
+
+const videoFetch = async (req, res) => {
+  try {
+    //const data = await videoModel.find({});
+    const data = await videoModel.findOne().sort({ createdAt: -1 }).limit(1);
+    console.log("Video_ID :" + data[0]?.video);
+
+    const current = data.video;
+    console.log("data :" + current);
+
+    if (current) {
+      const videoPath =
+        "C:/Users/devel/OneDrive/Desktop/KreationVideo18-01/ServerSide/videos/" +
+        current;
+      //const videoPath = path.join(__dirname, videosDirectory, data[0]?.video);
+      console.log("hello : " + videoPath);
+
+      const videoStream = fs.createReadStream(videoPath);
+
+      videoStream.once("error", (err) => {
+        console.error(`Error reading video file: ${err}`);
+        res.status(500).json({ message: "Internal Server Error" });
+      });
+
+      res.status(200).header("Content-Type", "video/mp4");
+      videoStream.pipe(res);
+    } else {
+      return res.status(404).json({ message: "Video not found." });
+    }
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+
+
+
+Frontend video get side...............
+
+const videoRef = useRef(null);
+const [binaryVideoData, setBinaryVideoData] = useState(null);
+
+  // Fetch the binary video data from the server
+  useEffect(() => {
+    axios
+      .get(`http://192.168.1.15:8050/${videoname}`, {
+        responseType: "arraybuffer",
+      })
+      .then((res) => {
+        // Create a Blob from the binary data
+        const blob = new Blob([res.data], { type: "video/mp4" });
+        setBinaryVideoData(blob);
+      })
+      .catch((err) => console.log(err));
+  }, []);
+
+  // Update the video source when binary data changes
+  useEffect(() => {
+    if (binaryVideoData) {
+      // Create a URL for the Blob
+      const videoURL = URL.createObjectURL(binaryVideoData);
+
+      // Set the video source to the created URL
+      const videoPlayer = videoRef.current;
+      if (videoPlayer) {
+        videoPlayer.src = videoURL;
+      }
+    }
+  }, [binaryVideoData]);
+
+
+
+Client side css display video....
+  <video
+                    ref={videoRef}
+
+                    width="900"
+                    poster={Image1}
+                    playsInline
+                  >
+                    {videoRef.current && (
+                      <source
+                        src={binaryVideoData ? videoRef.current?.src : ""}
+                        type="video/mp4"
+                      />
+                    )}
+                    Your browser does not support the video tag.
+                  </video>
