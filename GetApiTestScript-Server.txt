@@ -1,0 +1,32 @@
+async function sendGetApiTest() {
+  const tasks = [];
+  let totalStartTime = process.hrtime(); 
+
+  for (let i = 0; i < 50; i++) {
+    tasks.push(function(callback) {
+      let requestStartTime = process.hrtime(); 
+      axios.get('http://localhost:7000/posters')
+        .then(response => {
+          let requestEndTime = process.hrtime(requestStartTime); 
+          console.log(`GET Request ${i + 1} completed in ${requestEndTime[0]}s ${requestEndTime[1] / 1000000}ms`.bgYellow.black);
+          callback(null, response.data);
+        })
+        .catch(error => {
+          console.error(`Error in GET request ${i + 1}:`.bgRed.white, error);
+          callback(error);
+        });
+    });
+  }
+
+  async.parallel(tasks, function(err, results) {
+    if (err) {
+      console.error(`Error sending GET requests:`.bgRed.white, err);
+    } else {
+      let totalEndTime = process.hrtime(totalStartTime); 
+      console.log(`All GET requests completed in ${totalEndTime[0]}s ${totalEndTime[1] / 1000000}ms`.bgMagenta.white);
+      console.log(`Results:`.bgBlue.white, results);
+    }
+  });
+}
+
+sendGetApiTest();

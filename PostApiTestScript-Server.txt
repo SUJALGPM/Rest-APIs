@@ -1,0 +1,45 @@
+async function sendPostApiTest() {
+  const postData = {
+    MRID: "E11786",
+    type: "poster",
+    drname: "Summet agarwal1",
+    brandName: "Sun Pharma",
+    topic: "MBBS",
+    designTemplate: "betavert2",
+    imageFileName: "1712228754816-MicrosoftTeams-image.png",
+    chemist1: "Ravi Pupil",
+    chemist2: "Soham kanad",
+    mobileNo: "7798028412"
+  };
+
+  const tasks = [];
+  let totalStartTime = process.hrtime();
+
+  for (let i = 0; i < 50; i++) {
+    tasks.push(function(callback) {
+      let requestStartTime = process.hrtime(); 
+      axios.post('http://localhost:4000/api/create-poster', postData)
+        .then(response => {
+          let requestEndTime = process.hrtime(requestStartTime);
+          console.log(`Request ${i + 1} completed in ${requestEndTime[0]}s ${requestEndTime[1] / 1000000}ms`.bgYellow.black);
+          callback(null, response.data);
+        })
+        .catch(error => {
+          console.error(`Error in request ${i + 1}:`.bgRed.white, error);
+          callback(error);
+        });
+    });
+  }
+
+  async.parallel(tasks, function(err, results) {
+    if (err) {
+      console.error(`Error sending POST requests:`.bgRed.white, err);
+    } else {
+      let totalEndTime = process.hrtime(totalStartTime);
+      console.log(`All POST requests completed in ${totalEndTime[0]}s ${totalEndTime[1] / 1000000}ms`.bgMagenta.white);
+      console.log(`Results:`.bgBlue.white, results);
+    }
+  });
+}
+
+// sendPostApiTest();
