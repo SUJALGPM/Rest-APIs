@@ -1,0 +1,52 @@
+--------------------------------------------------------MONGODB BACKUP AND RESTORE---------------------------------------------------------
+
+Install mongodb Compass in system...
+Step1 :- donwload mongodb Compass msi file.
+step2 :- setup bin file path in environment variable (system variable me path set karna).
+step3 :- install mongoShell msi file.
+step4 :- check install or not run mongod --version / mongosh command
+step5 :- install mongodb command line database tool msi file.
+step6 :- go to find tool which is download in same folder where your mongodb is present.
+step7 :- go to tool => 100 => copy the bin path and setup to env variable (system variable me path set karna).
+
+
+Finally monogdb tool setup Complete try backup and restore commands...
+
+1. cmd1 :-  mongodump
+   theory :- It will auto backup and create a dump folder in your current dir...
+
+2. cmd2 :- mongodump --out backup
+   theory :- It will create backup of databse in your backup custom folder...
+
+3. cmd3 :- mongodump -d databaseName --out folderName
+   theory :- It will create a backup particular to database in a custom folder...
+
+4. cmd4 :- mongodump -d databaseName -c collectionName --out folderName..
+   theory :- It will create a backup a single collection with custom folder...
+
+5. cmd5 :- mongorestore --uri="mongodb://username:password@host:port" --drop --archive="/path/to/backup/folder"
+   theory :- It will backup data from mongodb datbase atlas link
+
+Finally work with mongodb atlas connection...
+
+1. Backup mongodb atlas data complete cluster.
+cmd = mongodump --uri="mongodb+srv://root:root@quizdata.qgsppo9.mongodb.net/" --out backup12
+
+2. Backup mongodb atlas a particular database only from cluster. (we can use --db databaseName also)...
+cmd = mongodump --uri="mongodb+srv://root:root@quizdata.qgsppo9.mongodb.net/ExcelSheetTest" --out backup13
+
+3. Backup mongodb atlas a particular collection only from databse.
+cmd = mongodump --uri="mongodb+srv://root:root@quizdata.qgsppo9.mongodb.net/ExcelSheetTest" -c slms --out backup14
+
+4. Restore mongodb atlas a particular collection from database...
+cmd = mongorestore --uri="mongodb+srv://root:root@quizdata.qgsppo9.mongodb.net/" --nsInclude=ExcelSheetTest.* backup15/ExcelSheetTest/flms.bson
+
+5. Restore mongodb collection if it exist in onther drive...
+cmd = mongorestore --uri="mongodb+srv://root:root@quizdata.qgsppo9.mongodb.net/" --nsInclude=ExcelSheetTest.* "C:/Users/devel/OneDrive/backup14/ExcelSheetTest/slms.bson"
+
+6. Restore mongodb database to atlas...
+cmd = Not resolve....
+
+
+
+
