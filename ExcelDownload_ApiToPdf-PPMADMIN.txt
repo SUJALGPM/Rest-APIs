@@ -1,0 +1,860 @@
+import { useEffect, useState } from "react";
+import Header from "../Header/Header";
+import Sidebar from "../Sidebar/Sidebar";
+import { useParams } from "react-router-dom";
+import axios from "axios";
+import { Tab, Tabs, TabList, TabPanel } from "react-tabs";
+import { IoMdArrowRoundBack } from "react-icons/io";
+import { RotatingLines } from "react-loader-spinner";
+import "react-tabs/style/react-tabs.css";
+import download from '../../assets/download.png';
+import "./styles.css";
+import * as XLSX from "xlsx";
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import jsPDF from "jspdf";
+import 'jspdf-autotable';
+
+const Reports = () => {
+  const pageName = "Reports";
+  const { id: adminId } = useParams();
+  const colors = ["#8536D8", "#3498db", "#27ae60"]; // Add your desired colors
+
+  const [feedbackReport, setFeedbackReport] = useState([]);
+  const [planReport, setPlanReport] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const reverseFormatDate = (dateString) => {
+    if (!dateString) return "";
+    const [year, month, day] = dateString.split("-");
+    return `${day}-${month}-${year}`;
+  };
+
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    const [day, month, year] = dateStr.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0); // Normalize the date to midnight
+    return date;
+  };
+
+  const removeFilter = () => {
+    setFromDate(""); // Clear start date
+    setToDate(""); // Clear end date
+    window.location.reload(); // Reload the page
+  };
+
+  const handleFromDateChange = (e) => setFromDate(e.target.value);
+  const handleToDateChange = (e) => setToDate(e.target.value);
+
+  const filteredData = feedbackReport.filter((item) => {
+    const parsedPurchaseDate = parseDate(item.accPPMDate);
+
+    const from = fromDate ? new Date(fromDate) : null;
+    const to = toDate ? new Date(toDate) : null;
+
+    if (from) from.setHours(0, 0, 0, 0);
+    if (to) to.setHours(23, 59, 59, 999);
+
+    const isWithinDateRange =
+      (!from || parsedPurchaseDate >= from) &&
+      (!to || parsedPurchaseDate <= to);
+
+    return isWithinDateRange && feedbackReport;
+  });
+
+  const filteredPlanData = planReport.filter((item) => {
+    const parsedPurchaseDate = parseDate(item.ppmDate);
+
+    const from = fromDate ? new Date(fromDate) : null;
+    const to = toDate ? new Date(toDate) : null;
+
+    if (from) from.setHours(0, 0, 0, 0);
+    if (to) to.setHours(23, 59, 59, 999);
+
+    const isWithinDateRange =
+      (!from || parsedPurchaseDate >= from) &&
+      (!to || parsedPurchaseDate <= to);
+
+    return isWithinDateRange && planReport;
+  });
+
+  useEffect(() => {
+    const fetchFlmData = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(
+          `http://192.168.1.10:6200/api/admin/report-analysis/${adminId}`
+        );
+        setFeedbackReport(response.data.feedbackReport);
+        setPlanReport(response.data.planReport);
+        console.log(response.data);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching FLM data:", error);
+      }
+    };
+
+    fetchFlmData();
+  }, []);
+
+
+  const exportToExcel = () =>{
+    const data = filteredData.map((item)=>({
+      ActualPPMDate: item.accPPMDate || "N/A",
+      ActualSpeaker: item.accSpkName || "N/A",
+      PlanMode: item.planMode || "N/A",
+      Amount: item.planMode || "N/A",
+      AdvancedReceived: item.advanceReceive || "N/A",
+      BrandName: item.brandName || "N/A",
+      SCCode: item.scCode || "N/A",
+      expensesWithoutBills: item.expensesWithoutBills || "N/A",
+      NoOFAttendee: item.noOfAttedance || "N/A",
+      Place: item.place || "N/A",
+      ppmFeedbackStatus: item.ppmFeedbackStatus || "N/A",
+      TotalExpenses: item.totalExpenses || "N/A",
+      VenueName: item.venueName || "N/A",
+      DateOfCreation: item.DateOfCreation || "N/A"
+    }))
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "FeedbackReport");
+    XLSX.writeFile(workbook, "Feedback-Report.xlsx");
+  }
+
+  const exportToExcel1 = () =>{
+    const data = planReport.map((item)=>({
+      PPMDate: item.ppmDate || "N/A",
+      PPMSpeaker: item.ppmSpeakerName || "N/A",
+      Place: item.ppmPlace || "N/A",
+      PPMPaymentMode: item.ppmPaymentMode || "N/A",
+      Attendee: item.ppmNoAttedance || "N/A",
+      PPMModeStatus: item.ppmModeStatus || "N/A",
+      PPMHotelReqDate: item.ppmHotelReqDate || "N/A",
+      PPMDoctorSpec: item.ppmDoctorSpec || "N/A",
+      PPMCost: item.ppmCost || "N/A",
+      PPMAdvancedReqDate: item.ppmAdvancedReqDate || "N/A",
+      PPMVenueName: item.ppmVenueName || "N/A",
+      DateOfCreation: item.DateOfCreation || "N/A"
+    }))
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "PlanReport");
+    XLSX.writeFile(workbook, "Plan-Report.xlsx");
+  }
+
+  const downloadBills = async ({ expensesWithBills }) => {
+    const billsArray = expensesWithBills.map((item) => item.expenseFile);
+    const newBillsArray = billsArray.map((img) => img.replace("\\", '/'));
+    const baseUrl = 'http://192.168.1.10:6200/'
+
+    const billUrl = newBillsArray.map((bill) => baseUrl + bill);
+    console.log(billUrl);
+  
+    if (newBillsArray.length === 1) {
+      try {
+        const response = await fetch(billUrl[0]);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const blob = await response.blob();
+        const fileName = billUrl[0].split('/').pop();
+        saveAs(blob, fileName);
+      } catch (error) {
+        console.error('Failed to download the image:', error);
+      }
+    } else {
+      try {
+        const zip = new JSZip();
+        const folder = zip.folder('bills');
+  
+        for (const bill of billUrl) {
+          const response = await fetch(bill);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          const fileName = bill.split('/').pop();
+          folder.file(fileName, arrayBuffer);
+        }
+  
+        zip.generateAsync({ type: 'blob' }).then((content) => {
+          saveAs(content, 'bills.zip');
+        });
+      } catch (error) {
+        console.error('Failed to download the images:', error);
+      }
+    }
+  };
+  
+  const downloadEventPhotos = async ({eventPhotos}) => {
+    const eventPhotosArray = eventPhotos.map((item) => item.fileName);
+    const neweventPhotosArray = eventPhotosArray.map((img) => img.replace("\\", '/'));
+    console.log(neweventPhotosArray);
+    const baseUrl = 'http://192.168.1.10:6200/';
+    const imgUrl = neweventPhotosArray.map((img) => baseUrl + img);
+    console.log(imgUrl);
+    if (neweventPhotosArray.length === 1) {
+      try {
+        const response = await fetch(imgUrl[0]);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const blob = await response.blob();
+        const fileName = imgUrl[0].split('/').pop();
+        saveAs(blob, fileName);
+      } catch (error) {
+        console.error('Failed to download the image:', error);
+      }
+    }
+    else {
+      try {
+        const zip = new JSZip();
+        const folder = zip.folder('images');
+  
+        for (const img of imgUrl) {
+          const response = await fetch(img);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          const fileName = img.split('/').pop();
+          folder.file(fileName, arrayBuffer);
+        }
+  
+        zip.generateAsync({ type: 'blob' }).then((content) => {
+          saveAs(content, 'images.zip');
+        });
+      } catch (error) {
+        console.error('Failed to download the images:', error);
+      }
+    }
+  }
+
+  const downloadTotal = async ({expensesWithBills, eventPhotos}) => {
+      const eventPhotosArray = eventPhotos.map((item) => item.fileName);
+      const neweventPhotosArray = eventPhotosArray.map((img) => img.replace("\\", '/'));
+      const billsArray = expensesWithBills.map((item) => item.expenseFile);
+      const newBillsArray = billsArray.map((img) => img.replace("\\", '/'));
+      const baseUrl = 'http://192.168.1.10:6200/'
+      const billUrl = newBillsArray.map((bill) => baseUrl + bill);
+      const imgUrl = neweventPhotosArray.map((img) => baseUrl + img);
+      console.log(billUrl);
+      console.log(imgUrl);
+      const zip = new JSZip();
+  
+      //Function to add files to the zip
+      const addFilesToZip = async (images, folderName) => {
+        for (const image of images) {
+          const fileName = image.split('/').pop();
+          const response = await fetch(image);
+          const blob = await response.blob();
+          zip.folder(folderName).file(fileName, blob);
+        }
+      };
+    
+
+      await addFilesToZip(billUrl, 'Bills');
+      await addFilesToZip(imgUrl, 'EventPhotos');
+
+      zip.generateAsync({ type: 'blob' }).then(content => {
+        // Save the zip file
+        saveAs(content, 'images.zip');
+      });
+  }
+
+  const downloadPdf = (data) => {
+    const {expensesWithBills} = data;
+    const {attedanceList} = data;
+    const {eventPhotos} = data;
+
+    const doc = new jsPDF();
+
+    // Initial data table (First Page)
+    const tableColumn = ["Field Name", "Field Value"];
+    const tableRows = [];
+    for (let key in data) {
+      if (key !== "attedanceList" && key !== "expensesWithBills" && key !== "eventPhotos") {
+        const fieldValue =
+          key === "ppmStatus" ? (data[key] ? "True" : "False") : data[key];
+        tableRows.push([key.replace(/([A-Z])/g, " $1").trim(), fieldValue]);
+      }
+    }
+    doc.autoTable(tableColumn, tableRows, { startY: 20 });
+
+     // New page for attendance and expenses tables
+     doc.addPage();
+
+     // Second Page contains two table
+     // Attendance List Table (Second Page)
+    doc.text("Attendance List", 15, 20);
+    const attedanceListColumns = ["Name", "SC Code", "Plan Mode", "Speciality"];
+    const attedanceListRows = attedanceList.map((item) => [
+      item.name,
+      item.scCode,
+      item.planMode,
+      item.speciality,
+    ]);
+    doc.autoTable(attedanceListColumns, attedanceListRows, { startY: 30 });
+  
+    // Expenses With Bills Table (Second Page)
+    doc.text("Expenses With Bills", 15, doc.autoTable.previous.finalY + 10);
+    const expensesWithBillsColumns = [
+      "Amount",
+      "Bill Date",
+      "Bill No",
+      "Description",
+    ];
+    const expensesWithBillsRows = expensesWithBills.map((item) => [
+      item.amount,
+      item.billDate,
+      item.billNo,
+      item.desc,
+    ]);
+    doc.autoTable(expensesWithBillsColumns, expensesWithBillsRows, {
+      startY: doc.autoTable.previous.finalY + 20,
+    });
+
+    // New page for images
+    doc.addPage();
+    doc.text("Event Photos", 15, 20);
+    const eventPhotosArray = eventPhotos.map((item) => item.fileName);
+    const neweventPhotosArray = eventPhotosArray.map((img) => img.replace("\\", '/'));
+    const baseUrl = 'http://192.168.1.10:6200/';
+    const imgUrl = neweventPhotosArray.map((img) => baseUrl + img);
+    console.log(Array.isArray(imgUrl));
+
+    // Adding Images on the third page
+    {
+    const imgWidth = 50;
+    const imgHeight = 50;
+    const padding = 10;
+    const imagesPerRow = 2;
+    let x = 15;
+    let y = 30;
+    
+    imgUrl.map((url, index) => {
+    const img = new Image();
+    img.src = url;
+    doc.addImage(img, "JPEG", x, y, imgWidth, imgHeight);
+    x += imgWidth + padding;
+    if ((index + 1) % imagesPerRow === 0) {
+     x = 15;
+     y += imgHeight + padding;
+     if (y + imgHeight > doc.internal.pageSize.height - 20) {
+       doc.addPage();
+       y = 20;
+     }
+    }
+    });
+    }
+    {
+    const imgWidth = 50;
+    const imgHeight = 50;
+    const padding = 10;
+    const imagesPerRow = 2;
+    let x = 15;
+    let y = 30;
+    doc.addPage();
+    doc.text("Expense Bills", 15, 20);
+    const billsArray = expensesWithBills.map((item) => item.expenseFile);
+    const newBillsArray = billsArray.map((img) => img.replace("\\", '/'));
+    const billUrl = newBillsArray.map((bill) => baseUrl + bill);
+    billUrl.map((url, index) => {
+      const img = new Image();
+      img.src = url;
+      doc.addImage(img, "JPEG", x, y, imgWidth, imgHeight);
+      x += imgWidth + padding;
+      if ((index + 1) % imagesPerRow === 0) {
+       x = 15;
+       y += imgHeight + padding;
+       if (y + imgHeight > doc.internal.pageSize.height - 20) {
+         doc.addPage();
+         y = 20;
+       }
+      }
+      });
+    }
+    doc.save('event_details.pdf');
+};
+    
+
+  return (
+    <>
+      <div className="grid grid-cols-2 absolute max-h-[120vh] ">
+        <Sidebar />
+
+        <div
+          // class="w-[82vw] z-1  bg-white absolute left-[230px] h-[100vh]  "
+          className="sm:w-[82vw] w-[92vw]  z-1 bg-white  absolute  sm:left-[210px] left-[10px] h-[200vh] sm:overflow-hidden"
+          style={{ borderRadius: "80px" }}
+        >
+          <div className="h-[100px]">
+            <Header pageName={pageName} />
+          </div>
+
+          {/* <nav class="block w-full max-w-full bg-transparent text-white shadow-none rounded-xl transition-all px-0 py-1">
+            <div class="flex flex-col-reverse justify-between gap-6 md:flex-row md:items-center">
+              <div class="capitalize relative top-[-10px] sm:left-[45px] left-[49px] w-[70vw] sm:w-[80vw]">
+                <h6 class="block antialiased tracking-normal font-bold  text-xl  leading-relaxed text-gray-900">
+                    
+                </h6>
+                <br></br>
+              </div>
+            </div>
+          </nav> */}
+          <div className="sm:mt-[0px] mt-[40px]  w-full h-auto ">
+            <div className="mb-4 sm:grid-cols-2 w-[30vw] sm:w-[80vw] grid gap-y-10 gap-0 grid-cols-1 relative sm:left-[45px] left-[45px]">
+              <div className="mb-4 sm:grid-cols-3 w-[30vw] sm:w-[80vw] grid gap-y-10 gap-0 grid-cols-1 relative sm:left-[45px] left-[45px]"></div>
+            </div>
+
+            {/* // new uI  */}
+
+            <div className="mx-auto max-w-screen sm:w-[80vw] relative sm:left-[10px]  ">
+              <div className="overflow-y-auto max-h-screen sm:w-full w-full rounded-2xl shadow-md  ">
+                <div className="overflow-x-auto">
+                  <Tabs>
+                    <TabList className="flex">
+                      <Tab className="flex-1 text-center py-2 focus:outline-none cursor-pointer">
+                        DR Feedback Report
+                      </Tab>
+                      <Tab className="flex-1 text-center py-2 focus:outline-none cursor-pointer">
+                        Dr Plan Report
+                      </Tab>
+                    </TabList>
+
+                    <TabPanel>
+                      {loading ? (
+                        <h1 className="text-center text-7xl m-32">
+                          <div
+                            role="status"
+                            className="flex justify-center align-center"
+                          >
+                            {/* <h1>Loading...</h1> */}
+                            <RotatingLines
+                              visible={true}
+                              height="56"
+                              width="56"
+                              strokeColor="grey"
+                              strokeWidth="5"
+                              animationDuration="0.75"
+                              ariaLabel="rotating-lines-loading"
+                              wrapperStyle={{}}
+                              wrapperClass=""
+                            />
+                          </div>
+                        </h1>
+                      ) : (
+                        <div className="overflow-hidden">
+                          {/* <div className="flex justify-end">
+                            <button
+                              type="button"
+                              // onClick={exportToExcel2}
+                              className="text-white m-8 focus:ring-4 bg-orange-600 font-medium rounded-full text-sm px-5 py-2.5 me-2  focus:outline-none "
+                            >
+                              Download Excel
+                            </button>
+                          </div> */}
+                          <div className="flex justify-end items-center gap-2 mt-10">
+                            <div className="mr-4 mb-4">
+                              <label
+                                htmlFor="from-date"
+                                className="block text-sm font-bold"
+                              >
+                                From Date
+                              </label>
+                              <input
+                                type="date"
+                                id="from-date"
+                                value={fromDate}
+                                onChange={handleFromDateChange}
+                                className="mt-1 block w-[10vw] pr-4 py-1 text-base border-2 border-gray-300 focus:outline-none focus:ring-gray-300 focus:border-gray-300 sm:text-sm rounded-md"
+                              />
+                            </div>
+                            <div className="mr-4 mb-4">
+                              <label
+                                htmlFor="to-date"
+                                className="block text-sm font-bold"
+                              >
+                                To Date
+                              </label>
+                              <input
+                                type="date"
+                                id="to-date"
+                                value={toDate}
+                                onChange={handleToDateChange}
+                                className="mt-1 block w-[10vw] pr-4 py-1 text-base border-2 border-gray-300 focus:outline-none focus:ring-gray-300 focus:border-gray-300 sm:text-sm rounded-md"
+                              />
+                            </div>
+                            <div className="mr-1" title="Clear Filter">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 16 16"
+                                fill="currentColor"
+                                className="bi bi-arrow-clockwise w-8 h-8"
+                                style={{ color: "gray", cursor: "pointer" }}
+                                onClick={removeFilter}
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"
+                                />
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966a.25.25 0 0 1 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192z"
+                                />
+                              </svg>
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={exportToExcel}
+                                className="text-white focus:ring-4 bg-orange-600 font-medium rounded-full text-sm px-5 py-2.5 me-2  focus:outline-none "
+                              >
+                                Download Excel
+                              </button>
+                            </div>
+                          </div>
+                          <div className="sm:-mx-8 px-2 pl-0 sm:px-8 py-0 overflow-auto">
+                            <div className="2xl:h-[60vh] inline-block min-w-full shadow rounded-lg">
+                              <table
+                                className="min-w-full leading-normal"
+                                id="doctorTable"
+                              >
+                                <thead>
+                                  <tr>
+                                    <th className="px-10 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Actual Date
+                                    </th>
+                                    <th className="px-10 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Actual Speaker
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      PlanMode
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Amount
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Advanced Received
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      BrandName
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      SCCode
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ExpenseWithout Bills
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      No.Of.Attendance
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Place
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      PPM Feedback Status
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Total Expenses
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Venue Name
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Date Of Creation
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Bills
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      EventPhotos
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Total
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Download Pdf
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {filteredData.map((item, index) => (
+                                    <tr key={index}>
+                                      <td className="px-18 py-3 pl-8 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.accPPMDate}
+                                      </td>
+                                      <td className="px-18 py-3 pl-12 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.accSpkName}
+                                      </td>
+                                      <td className="px-16 py-3 pl-12 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.planMode}
+                                      </td>
+                                      <td className="px-18 py-3 pl-12 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.addAmount}
+                                      </td>
+                                      <td className="px-18 py-3 pl-14 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.advanceReceive}
+                                      </td>
+                                      <td className="px-18 py-3 pl-12 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.brandName}
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.scCode}
+                                      </td>
+                                      <td className="px-18 py-3 pl-16 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.expensesWithoutBills}
+                                      </td>
+                                      <td className="px-18 py-3 pl-20 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.noOfAttedance}
+                                      </td>
+                                      <td className="px-18 py-3 pl-8 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.place}
+                                      </td>
+                                      <td className="px-18 py-3 pl-14 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmFeedbackStatus}
+                                      </td>
+                                      <td className="px-18 py-3 pl-14 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.totalExpenses}
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.venueName}
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {reverseFormatDate(item.DateOfCreation)}
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        <button className="text-xs" onClick={() => downloadBills(item)}><img src={download} alt="" className="w-1/4"/></button>
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-center text-sm text-black">
+                                        <button className="text-xs" onClick={() => downloadEventPhotos(item)}><img src={download} alt="" className="w-1/4"/></button>
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-right text-sm text-black">
+                                        <button className="text-xs" onClick={() => downloadTotal(item)}><img src={download} alt="" className="w-1/4"/></button>
+                                      </td>
+                                      <td className="px-18 py-3 pl-10 border-b border-gray-200 bg-white text-right text-sm text-black">
+                                        <button className="text-xs" onClick={() => downloadPdf(item)}><img src={download} alt="" className="w-1/4"/></button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </TabPanel>
+
+                    <TabPanel>
+                      {loading ? (
+                        <h1 className="text-center text-7xl m-32">
+                          <div
+                            role="status"
+                            className="flex justify-center align-center"
+                          >
+                            {/* <h1>Loading...</h1> */}
+                            <RotatingLines
+                              visible={true}
+                              height="56"
+                              width="56"
+                              strokeColor="grey"
+                              strokeWidth="5"
+                              animationDuration="0.75"
+                              ariaLabel="rotating-lines-loading"
+                              wrapperStyle={{}}
+                              wrapperClass=""
+                            />
+                          </div>
+                        </h1>
+                      ) : (
+                        <div className="overflow-hidden">
+                          <div className="flex justify-end items-center gap-2 mt-10">
+                            <div className="mr-4 mb-4">
+                              <label
+                                htmlFor="from-date"
+                                className="block text-sm font-bold"
+                              >
+                                From Date
+                              </label>
+                              <input
+                                type="date"
+                                id="from-date"
+                                value={fromDate}
+                                onChange={handleFromDateChange}
+                                className="mt-1 block w-[10vw] pr-4 py-1 text-base border-2 border-gray-300 focus:outline-none focus:ring-gray-300 focus:border-gray-300 sm:text-sm rounded-md"
+                              />
+                            </div>
+                            <div className="mr-4 mb-4">
+                              <label
+                                htmlFor="to-date"
+                                className="block text-sm font-bold"
+                              >
+                                To Date
+                              </label>
+                              <input
+                                type="date"
+                                id="to-date"
+                                value={toDate}
+                                onChange={handleToDateChange}
+                                className="mt-1 block w-[10vw] pr-4 py-1 text-base border-2 border-gray-300 focus:outline-none focus:ring-gray-300 focus:border-gray-300 sm:text-sm rounded-md"
+                              />
+                            </div>
+                            <div className="mr-1" title="Clear Filter">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 16 16"
+                                fill="currentColor"
+                                className="bi bi-arrow-clockwise w-8 h-8"
+                                style={{ color: "gray", cursor: "pointer" }}
+                                onClick={removeFilter}
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"
+                                />
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966a.25.25 0 0 1 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192z"
+                                />
+                              </svg>
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={exportToExcel1}
+                                className="text-white focus:ring-4 bg-orange-600 font-medium rounded-full text-sm px-5 py-2.5 me-2  focus:outline-none "
+                              >
+                                Download Excel
+                              </button>
+                            </div>
+                          </div>
+                          <div className="sm:-mx-8 px-2 pl-0 sm:px-8 py-0 overflow-auto">
+                            <div className="2xl:h-[60vh] inline-block min-w-full shadow rounded-lg">
+                              <table
+                                className="min-w-full leading-normal"
+                                id="doctorTable"
+                              >
+                                <thead>
+                                  <tr>
+                                    <th className="px-10 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      PPMDate
+                                    </th>
+                                    <th className="px-10 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      PPMSpeaker
+                                    </th>
+                                    {/* <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmPlanStatus
+                                    </th> */}
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Place
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmPaymentMode
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      Attendance
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmModeStatus
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmHotelReqDate
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmDoctorSpec
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmCost
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmAdvancedReqDate
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      ppmVenueName
+                                    </th>
+                                    <th className="px-10  py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                      DateOfCreation
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {filteredPlanData.map((item, index) => (
+                                    <tr key={index}>
+                                      <td className="px-18 py-3 pl-2 border-b border-gray-200 bg-white text-center text-sm text-black">
+                                        {item.ppmDate}
+                                      </td>
+                                      <td className="px-18 py-3 pl-2 border-b border-gray-200 bg-white text-center text-sm text-black">
+                                        {item.ppmSpeakerName}
+                                      </td>
+                                      {/* <td className="px-16 py-3 pl-12 border-b border-gray-200 bg-white text-center text-sm text-black">
+                                        {item.ppmPlanStatus}
+                                      </td> */}
+                                      <td className="px-18 py-3 pl-8 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmPlace}
+                                      </td>
+                                      <td className="px-18 py-3 pl-20 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmPaymentMode}
+                                      </td>
+                                      <td className="px-18 py-3 pl-20 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmNoAttedance}
+                                      </td>
+                                      <td className="px-18 py-3 pl-16 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmModeStatus}
+                                      </td>
+                                      <td className="px-18 py-3 pl-16 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmHotelReqDate}
+                                      </td>
+                                      <td className="px-18 py-3 pl-20 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmDoctorSpec}
+                                      </td>
+                                      <td className="px-18 py-3 pl-14 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmCost}
+                                      </td>
+                                      <td className="px-18 py-3 pl-16 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmAdvancedReqDate}
+                                      </td>
+                                      <td className="px-18 py-3 pl-12 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.ppmVenueName}
+                                      </td>
+                                      <td className="px-18 py-3 pl-14 border-b border-gray-200 bg-white text-left text-sm text-black">
+                                        {item.DateOfCreation}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </TabPanel>
+                  </Tabs>
+                </div>
+              </div>
+            </div>
+
+            {/* // */}
+          </div>
+
+          {/* // new Ui ends  */}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default Reports;
+
+
+
+
+
+
+
+
+  
+
+ 
