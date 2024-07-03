@@ -1,0 +1,55 @@
+const winstonLogsExcelOut = async (req, res) => {
+  try {
+    // Get the ServerLogs collection from the default database
+    const collection = mongoose.connection.collection("ServerLogs");
+
+    // Fetch the logs from the collection
+    const logs = await collection.find().toArray();
+
+    if (logs.length === 0) {
+      console.log("No logs found in the MongoDB collection.");
+      return res
+        .status(404)
+        .send({ message: "No logs found to export.", success: false });
+    }
+
+    // Format logs for Excel
+    const formattedLogs = logs.map((log) => ({
+      timestamp: log.timestamp,
+      level: log.level,
+      message: log.message,
+      meta: JSON.stringify(log.meta),
+      body: JSON.stringify(log.body),
+    }));
+
+    console.log("Formatted logs for Excel:", formattedLogs);
+
+    // Convert logs to Excel format
+    const ws = xlsx.utils.json_to_sheet(formattedLogs);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Logs");
+
+    // Write the Excel file to the current working directory
+    const filePath = path.join("C:/Users/devel/OneDrive/Sujal Work/iCreateVideo-Project/AnalysisReport/ICreateVideoServerLogs.xlsx");
+    xlsx.writeFile(wb, filePath);
+
+    console.log(Excel file saved to ${filePath});
+    res
+      .status(201)
+      .send({
+        message: "Winston File excelout successfully...",
+        success: true,
+      });
+  } catch (err) {
+    console.error("Error during log export:", err);
+    res
+      .status(500)
+      .send({
+        message: "Failed to excelout winston logs..!!!",
+        success: false,
+      });
+  } finally {
+    // Disconnect from MongoDB
+    await mongoose.disconnect();
+  }
+};
