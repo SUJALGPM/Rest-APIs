@@ -1,0 +1,69 @@
+//Question Migration from admin ---> mr backend...
+const questionsMigration = async (req, res) => {
+  try {
+    // Handle question api response...
+    const response = await axios.get(`http://localhost:8000/api/questions`);
+    const responseCategory = await axios.get(
+      `http://localhost:8000/allcategories`
+    );
+
+    // Extract questions from the response data...
+    const questions = response.data;
+    const categories = responseCategory.data;
+
+    // Iterate through each question and save it to the database of mr backend....
+    for (const question of questions) {
+      const checkQuestion = await QuestionMatrix.findOne({
+        questionObjId: question,
+      });
+
+      if (!checkQuestion) {
+        // Create a new instance of the QuestionMatrix model
+        const newQuestion = new QuestionMatrix({
+          questionObjId: question._id,
+          question: question.question,
+          category: question.category,
+          level: question.level,
+        });
+
+        // Save the question to the database
+        await newQuestion.save();
+
+        console.log(`New question inserted..`.bgGreen.white);
+      } else {
+        console.log(`Old question rejected...!!`.bgRed.white);
+      }
+    }
+
+    // Iterate through each category and save it to the database of mr backend....
+    for (const category of categories) {
+      const checkCategory = await CategoryMatrix.findOne({
+        categoryObjId: category,
+      });
+
+      if (!checkCategory) {
+        // Create a new instance of the QuestionMatrix model
+        const newCategory = new CategoryMatrix({
+          categoryObjId: category._id,
+          name: category.name,
+          description: category.description,
+          isActive: category.isActive,
+        });
+
+        // Save the category to the database
+        await newCategory.save();
+
+        console.log(`New category inserted..`.bgGreen.white);
+      } else {
+        console.log(`Old category rejected...!!`.bgRed.white);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching questions:", error);
+    res
+      .status(501)
+      .send({ message: "Failed to track question matrix..!!", success: false });
+  }
+};
+// cron.schedule("0 */12 * * *", questionsMigration); // Schedule the job to run every 12 hours...
+cron.schedule('*/5 * * * * *', questionsMigration);
